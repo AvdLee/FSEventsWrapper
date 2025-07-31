@@ -9,8 +9,6 @@
 import CoreServices
 import Foundation
 
-
-
 public enum FSEvent : Sendable {
 	
 	public enum MustScanSubDirsReason : Sendable {
@@ -19,7 +17,6 @@ public enum FSEvent : Sendable {
 		case kernelDropped
 		
 		case unknown
-		
 	}
 	
 	public enum ItemType : Sendable {
@@ -31,7 +28,6 @@ public enum FSEvent : Sendable {
 		case lastHardlink
 		
 		case unknown
-		
 	}
 	
 	/* For all event types, the “fromUs” var (whether the event comes from us) will only be set to a non-nil value if kFSEventStreamCreateFlagMarkSelf is set.

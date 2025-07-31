@@ -8,21 +8,41 @@
 
 import CoreServices
 import Foundation
+import Synchronization
 
+struct EventStreamContainer: @unchecked Sendable {
+    var isStarted = false
+    let eventStream: FSEventStreamRef
+    
+    mutating func start() {
+        guard !isStarted else { return }
+        FSEventStreamStart(eventStream)
+        isStarted = true
+    }
+    
+    mutating func stop() {
+        guard isStarted else { return }
+        FSEventStreamStop(eventStream)
+        isStarted = false
+    }
+    
+    mutating func invalidate() {
+        stop()
+        FSEventStreamInvalidate(eventStream)
+        FSEventStreamRelease(eventStream) /* I thought the release would be automatic, it seems it is not. */
+    }
+}
 
-
-public class FSEventStream {
+public final class FSEventStream: Sendable {
 	
 	public typealias Callback = @Sendable (FSEventStream, FSEvent) -> Void
 	
 	public let callback: Callback
 	
-	internal let eventStream: FSEventStreamRef
+    private let eventStreamContainer: Mutex<EventStreamContainer>
 	internal let eventStreamFlags: FSEventStreamCreateFlags
 	
 	public let queue: DispatchQueue
-	
-	private(set) var isStarted = false
 	
 	public convenience init?(
 		path: String,
@@ -98,43 +118,38 @@ public class FSEventStream {
 		guard let s = FSEventStreamCreate(kCFAllocatorDefault, eventStreamCallback, &context, cfpaths, actualStartId, updateInterval, actualFlags) else {
 			return nil
 		}
-		self.eventStream = s
-		self.eventStreamFlags = actualFlags
+        self.eventStreamContainer = Mutex(EventStreamContainer(isStarted: false, eventStream: s))
+        self.eventStreamFlags = actualFlags
 		
 		FSEventStreamSetDispatchQueue(s, queue)
 		
 		objcWrapper.swiftStream = self
+        
 	}
 	
 	deinit {
-		stopWatching()
-		FSEventStreamInvalidate(eventStream)
-		FSEventStreamRelease(eventStream) /* I thought the release would be automatic, it seems it is not. */
+        eventStreamContainer.withLock { container in
+            container.invalidate()
+        }
 	}
 	
 	public func startWatching() {
-		if isStarted {return}
-		
-		FSEventStreamStart(eventStream)
-		isStarted = true
+        eventStreamContainer.withLock { container in
+            container.start()
+        }
 	}
 	
 	public func stopWatching() {
-		if !isStarted {return}
-		
-		FSEventStreamStop(eventStream)
-		isStarted = false
+        eventStreamContainer.withLock { container in
+            container.stop()
+        }
 	}
-	
 }
 
 
 private class FSEventStreamObjCWrapper : NSObject {
-	
 	weak var swiftStream: FSEventStream?
-	
 }
-
 
 private func eventStreamCallback(
 	streamRef: ConstFSEventStreamRef,

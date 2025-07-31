@@ -8,7 +8,7 @@ import Foundation
 
 /** An AsyncSequence of `FSEvent` objects. */
 @available(macOS 10.15, *)
-public struct FSEventAsyncStream : AsyncSequence {
+public struct FSEventAsyncStream : AsyncSequence, Sendable {
 	
 	public typealias Element = FSEvent
 	
